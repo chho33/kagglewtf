@@ -1,9 +1,7 @@
 from trend_util import *
 from functools import partial
 import glob
-file_path = '/data/examples/trend/data/'
-rawdata_path = file_path + 'query_log/'
-export_file_path = 'export/'
+import re
 files = glob.glob(rawdata_path+'/*.csv')
 list.sort(files)
 #files = files[-30:-20]
@@ -159,7 +157,9 @@ def etl_tfidf_day(n=1,df_intersect=None,suffix=''):
     df.to_csv(filename)
 
 #get intersection btw train and test: prod set, cus set, prod_cus set 
-def etl_intersection_train_test(df,dump=False):
+def etl_intersection_train_test(n=31,ns=ns,dump=False,reverse=False,breakout=None,
+                                return_fields=['prod_cus','product','customer'],**kwargs):
+    if n > ns: n = ns
     for i in range(ns)[::n]:
         if breakout:
             if i >= breakout: return df_past 
@@ -170,8 +170,32 @@ def etl_intersection_train_test(df,dump=False):
         df.rename(columns={0: 'FileID', 1: 'CustomerID',2:'QueryTs',3:'ProductID'}, inplace=True)
         df = clean_df(df)
         if i == 0:
-            df_past = get_train_test_intersect(df,**kwargs)
+            df_past = get_train_test_prod_cus_set(df,return_fields=return_fields,**kwargs)
         else:
-            df_past = get_train_test_intersect(df,df_past,**kwargs)
-    df = merge_prod_cus(df_past,dump=dump)
+            df_past = get_train_test_prod_cus_set(df,df_past,return_fields=return_fields,**kwargs)
+    df = get_prod_cus_intersect(df_past,dump=dump,reverse=reverse,return_fields=return_fields)
     return df
+
+def etl_dump_intersection_data(typ=['tight','loose'],ns=ns,dump=False,reverse=False,breakout=None,
+                               return_fields=['prod_cus','product','customer'],**kwargs):
+    df_intersect = etl_intersection_train_test(ns=ns,reverse=reverse,return_fields=return_fields,**kwargs)
+    if not isinstance(typ,list):
+        typs = [typ]
+    else: typs = typ
+    print('typs: ',typs)
+    for i in range(ns):
+        if breakout:
+            if i >= breakout: return 
+        f = files[i]
+        print(i,f)
+        df = pd.read_csv(f,header=None)
+        df.rename(columns={0: 'FileID', 1: 'CustomerID',2:'QueryTs',3:'ProductID'}, inplace=True)
+        df = clean_df(df)
+        for typ in typs:
+            df = common_filter(df,df_intersect,typ=typ)
+            if 'FileID' in df.columns:
+                df = df.set_index('FileID')
+            f = re.search('/(\d+\.csv)',f).group(1)
+            f = '%s%s_intersect/%s'%(etl_file_path,typ,f)
+            print('dumping %s ...'%f)
+            df.to_csv(f) 

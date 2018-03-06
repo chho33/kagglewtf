@@ -5,6 +5,8 @@ from datetime import datetime
 import pickle
 file_path = '/data/examples/trend/data/'
 rawdata_path = file_path + 'query_log/'
+export_file_path = 'export/'
+etl_file_path = 'data/trend/'
 
 ############ etl ############
 def norm_it(df):
@@ -42,7 +44,7 @@ def clean_df(df):
     df = df.replace(['055649'],['55649'])
     return df
 
-def append_list(x):
+def append_set(x):
     new_x = x.dropna()
     if new_x.shape[0] == 0:
         return
@@ -53,7 +55,31 @@ def append_list(x):
     new_x = set(new_x)
     return new_x
 
-def get_train_test_intersect(df,df_past=None):
+def outer_set(x):
+    new_x = x.dropna()
+    if new_x.shape[0] == 0:
+        return
+    elif new_x.shape[0] == 1:
+        new_x = new_x.values[0]
+    else:
+        set_tmp0 = set(new_x[0])
+        set_tmp = set(new_x[1])
+        new_x = set_tmp0 - set_tmp 
+        set_tmp = set_tmp - set_tmp0
+        new_x.update(set_tmp)
+    new_x = set(new_x)
+    return new_x
+
+def intersect_set(x):
+    new_x = x.dropna()
+    if new_x.shape[0] == 0 or new_x.shape[0] == 1:
+        return
+    else:
+        new_x = pd.Index(list(new_x[0])).intersection(pd.Index(list(new_x[1])))
+    new_x = set(new_x)
+    return new_x
+
+def get_train_test_prod_cus_set(df,df_past=None,return_fields=['prod_cus']):
     if 'FileID' in df.columns:
         df = df.set_index('FileID')
     test_ids = pd.read_csv(file_path+'testing-set.csv',header=None)
@@ -63,58 +89,112 @@ def get_train_test_intersect(df,df_past=None):
     df_train = df.ix[train_ids].dropna()
     df_test = df.ix[test_ids].dropna()
     #uniq product
-    train_prod_set = set(df_train['ProductID'])
-    test_prod_set = set(df_test['ProductID'])
+    if 'product' in return_fields:
+        train_prod_set = set(df_train['ProductID'])
+        test_prod_set = set(df_test['ProductID'])
     #uniq customer
-    train_cus_set = set(df_train['CustomerID'])
-    test_cus_set = set(df_test['CustomerID'])
+    if 'customer' in return_fields:
+        train_cus_set = set(df_train['CustomerID'])
+        test_cus_set = set(df_test['CustomerID'])
     #uniq prod cross customer
-    train_prod_cus_set = df_train.groupby('ProductID')['CustomerID'].unique()
-    test_prod_cus_set = df_test.groupby('ProductID')['CustomerID'].unique()
+    if 'prod_cus' in return_fields:
+        train_prod_cus_set = df_train.groupby('ProductID')['CustomerID'].unique()
+        test_prod_cus_set = df_test.groupby('ProductID')['CustomerID'].unique()
     if df_past is not None:
         #merge prod
-        train_prod_set.update(df_past['train_prod_set'])
-        test_prod_set.update(df_past['test_prod_set'])
+        if 'product' in return_fields:
+            train_prod_set.update(df_past['train_prod_set'])
+            test_prod_set.update(df_past['test_prod_set'])
 
         #merge customer
-        train_cus_set.update(df_past['train_cus_set'])
-        test_cus_set.update(df_past['test_cus_set'])
+        if 'customer' in return_fields:
+            train_cus_set.update(df_past['train_cus_set'])
+            test_cus_set.update(df_past['test_cus_set'])
 
         #merge prod cross customer
-        train_prod_cus_set = df_train.groupby('ProductID')['CustomerID'].unique()
-        train_prod_cus_set = pd.concat([train_prod_cus_set,df_past['train_prod_cus_set']],axis=1)
-        train_prod_cus_set.columns = [0,1]
-        print(train_prod_cus_set.head())
-        train_prod_cus_set = train_prod_cus_set.apply(append_list,axis=1)
+        if 'prod_cus' in return_fields:
+            train_prod_cus_set = df_train.groupby('ProductID')['CustomerID'].unique()
+            train_prod_cus_set = pd.concat([train_prod_cus_set,df_past['train_prod_cus_set']],axis=1)
+            train_prod_cus_set.columns = [0,1]
+            train_prod_cus_set = train_prod_cus_set.apply(append_set,axis=1)
 
-        test_prod_cus_set = df_test.groupby('ProductID')['CustomerID'].unique()
-        test_prod_cus_set = pd.concat([test_prod_cus_set,df_past['test_prod_cus_set']],axis=1)
-        test_prod_cus_set.columns = [0,1]
-        test_prod_cus_set = test_prod_cus_set.apply(append_list,axis=1)
+            test_prod_cus_set = df_test.groupby('ProductID')['CustomerID'].unique()
+            test_prod_cus_set = pd.concat([test_prod_cus_set,df_past['test_prod_cus_set']],axis=1)
+            test_prod_cus_set.columns = [0,1]
+            test_prod_cus_set = test_prod_cus_set.apply(append_set,axis=1)
+    data = {}
+    if 'product' in return_fields:
+        data['train_prod_set'] = train_prod_set
+        data['test_prod_set'] = test_prod_set
+    if 'customer' in return_fields:
+        data['train_cus_set'] = train_cus_set
+        data['test_cus_set'] = test_cus_set
+    if 'prod_cus' in return_fields:
+        data['train_prod_cus_set'] = train_prod_cus_set
+        data['test_prod_cus_set'] = test_prod_cus_set
 
+    return data
     return {'train_prod_set':train_prod_set,'test_prod_set':test_prod_set,
            'train_cus_set':train_cus_set,'test_cus_set':test_cus_set,
            'train_prod_cus_set':train_prod_cus_set,'test_prod_cus_set':test_prod_cus_set}
 
-def merge_prod_cus(df,dump=True):
+def get_prod_cus_intersect(df,dump=False,return_fields=['prod_cus'],reverse=True):
     #merge cus
-    cus_set = df['train_cus_set']
-    test_cus_set = df['test_cus_set']
-    cus_set.update(test_cus_set)
+    if 'customer' in return_fields:
+        cus_set = df['train_cus_set']
+        test_cus_set = df['test_cus_set']
+        if reverse:
+            cus_set_tmp = cus_set - test_cus_set  
+            cus_set = test_cus_set - cus_set 
+            cus_set.update(cus_set_tmp) 
+            if dump:
+                pickle.dump(cus_set, 'export/trend_uncommon_customers.pkl')
+        else:
+            cus_set = pd.Index(cus_set)
+            test_cus_set = pd.Index(test_cus_set)
+            cus_set = cus_set.intersection(test_cus_set)
+            cus_set = set(cus_set)
+            if dump:
+                pickle.dump(cus_set, 'export/trend_common_customers.pkl')
     #merge prod
-    prod_set = df['train_prod_set']
-    test_prod_set = df['test_prod_set']
-    prod_set.update(test_prod_set)
+    if 'product' in return_fields:
+        prod_set = df['train_prod_set']
+        test_prod_set = df['test_prod_set']
+        if reverse:
+            prod_set_tmp = prod_set - test_prod_set  
+            prod_set = test_prod_set - prod_set 
+            prod_set.update(prod_set_tmp) 
+            if dump:
+                pickle.dump(prod_set, 'export/trend_uncommon_products.pkl')
+        else:
+            prod_set = pd.Index(prod_set)
+            test_prod_set = pd.Index(test_prod_set)
+            prod_set = prod_set.intersection(test_prod_set)
+            prod_set = set(prod_set)
+            if dump:
+                pickle.dump(prod_set, 'export/trend_common_products.pkl')
     #merge prod cross cus
-    train_prod_cus = df['train_prod_cus_set']
-    test_prod_cus = df['test_prod_cus_set']
-    df_prod_cus = pd.concat([train_prod_cus,test_prod_cus],join='inner',axis=1)
-    df_prod_cus = df_prod_cus.apply(append_list,axis=1)
-    if dump:
-        pickle.dump(cus_set, 'export/trend_common_customers.pkl')
-        pickle.dump(prod_set, 'export/trend_common_products.pkl')
-        pickle.dump(df_prod_cus, 'export/trend_common_products_customers.pkl')
-    return {'cus_set':cus_set,'prod_set':prod_set,'df_prod_cus':df_prod_cus}
+    if 'prod_cus' in return_fields:
+        train_prod_cus = df['train_prod_cus_set']
+        test_prod_cus = df['test_prod_cus_set']
+        df_prod_cus = pd.concat([train_prod_cus,test_prod_cus],join='inner',axis=1)
+        if reverse:
+            df_prod_cus = df_prod_cus.apply(outer_set,axis=1)
+            if dump:
+                pickle.dump(df_prod_cus, 'export/trend_uncommon_products_customers.pkl')
+        else:
+            df_prod_cus = df_prod_cus.apply(intersect_set,axis=1)
+            if dump:
+                pickle.dump(df_prod_cus, 'export/trend_common_products_customers.pkl')
+    data = {}
+    if 'product' in return_fields:
+        data['product'] = prod_set
+    if 'customer' in return_fields:
+        data['customer'] = cus_set
+    if 'prod_cus' in return_fields:
+        data['prod_cus'] = df_prod_cus
+    return data
+    return {'customer':cus_set,'product':prod_set,'prod_cus':df_prod_cus}
 
 def common_prod_cus_filter(df,df_prod_cus):
     prods = df_prod_cus.index
@@ -139,19 +219,35 @@ def common_prod_cus_filter(df,df_prod_cus):
     df = df.reset_index()
     return df
 
-def common_filter(df,df_target,typ='prod_cus'):
+def common_filter(df,df_target,typ='tight'):
+    # typ = [loose|tight|product|customer]
+    # tight means uniq prod+cus ; loose otherwise
     if df.index.name == 'FileID': df = df.reset_index()
-    if typ == 'prod_cus':
-        df = common_prod_cus_filter(df,df_target['df_%s'%typ])
+    if typ == 'tight':
+        df = common_prod_cus_filter(df,df_target['prod_cus'])
     else:
-        target_set = df_target['%s_set'%typ]
-        ixs = pd.Index(target_set)
-        if typ == 'prod':
+        if typ == 'loose':
+            target_set = df_target['product']
+            ixs = pd.Index(target_set)
             df = df.set_index('ProductID')
-        elif typ == 'cus':
+            df = df.ix[ixs]
+            df = df.reset_index()
+            target_set = df_target['customer']
+            ixs = pd.Index(target_set)
             df = df.set_index('CustomerID')
-        df = df.ix[ixs]
-        df = df.reset_index()
+            df = df.ix[ixs]
+            df = df.reset_index()
+        else:
+            if typ == 'product':
+                target_set = df_target['product']
+                ixs = pd.Index(target_set)
+                df = df.set_index('ProductID')
+            elif typ == 'customer':
+                target_set = df_target['customer']
+                ixs = pd.Index(target_set)
+                df = df.set_index('CustomerID')
+            df = df.ix[ixs]
+            df = df.reset_index()
     return df
 
 #FileID被各個ProductID開啟的次數的比例
@@ -309,7 +405,7 @@ def cal_tfidf(df,field):
     return df
 
 def get_corpus(df,df_past=None,field='CustomerID'):
-    df = df.groupby(field).apply(get_list_FileID)
+    df = df.groupby(field).apply(get_str_FileID)
     if df_past is not None:
         intersect_ix = df.index.intersection(df_past.index)
         diff_ix = df.index.difference(df_past.index)
@@ -465,7 +561,7 @@ def extend_cols(df):
 ############ model ############
 def get_data(version=4):
     cols = ['FileID','y']
-    df = pd.read_csv('export/trend_v%s.csv'%version)
+    df = pd.read_csv('%s/trend_v%s.csv'%(export_file_path,version))
     df = df.set_index('FileID')
     test = pd.read_csv(file_path+'testing-set.csv',header=None)
     train = pd.read_csv(file_path+'training-set.csv',header=None)
@@ -480,6 +576,8 @@ def get_data(version=4):
     test = df.ix[test_indices]
     return train, y, test
 
-get_list_FileID = lambda x:' '.join(list(x.FileID))
+get_str_FileID = lambda x:' '.join(list(x.FileID))
+def get_list_FileID(x):
+    return list(x.FileID)
 ############ model ############
 
