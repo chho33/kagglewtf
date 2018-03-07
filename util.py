@@ -84,7 +84,7 @@ def best_gmm_cluster(data,n_components_range=range(6, 20)):
             aic_tmp = gmm.aic(data)
             bic.append(aic_tmp)
             print('aic: ',aic_tmp)
-            logging.info('n_components : %s, aic: %s'%(n_components,aic_tmp))
+            logging.info('cv_type: %s, n_components : %s, aic: %s'%(cv_type, n_components,aic_tmp))
             print('cost time: ', time.time() - a)
             if bic[-1] < lowest_bic:
                 lowest_bic = bic[-1]

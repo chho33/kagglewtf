@@ -2,10 +2,12 @@ from trend_util import *
 from functools import partial
 import glob
 import re
+logging.basicConfig(filename='log/trend_etl_util.log',level=logging.DEBUG)
 files = glob.glob(rawdata_path+'/*.csv')
 list.sort(files)
 #files = files[-30:-20]
-#files = [rawdata_path+'0520.csv',rawdata_path+'0521.csv']
+#files = [rawdata_path+'0325.csv',rawdata_path+'0326.csv']
+#files = [rawdata_path+'0520.csv',rawdata_path+'0301.csv']
 ns = len(files)
 
 def get_files_every_nday(n,files=files,df_intersect=None):
@@ -188,14 +190,20 @@ def etl_dump_intersection_data(typ=['tight','loose'],ns=ns,dump=False,reverse=Fa
             if i >= breakout: return 
         f = files[i]
         print(i,f)
-        df = pd.read_csv(f,header=None)
+        #df = pd.read_csv(f,header=None)
+        df = check_file_empty(f,header=None)
         df.rename(columns={0: 'FileID', 1: 'CustomerID',2:'QueryTs',3:'ProductID'}, inplace=True)
         df = clean_df(df)
         for typ in typs:
+            print('typ: ',typ)
             df = common_filter(df,df_intersect,typ=typ)
+            if df is False: 
+                print('df is empty, skip %s'%f)
+                logging.info('df is empty, skip %s ...'%f)
+                continue
             if 'FileID' in df.columns:
                 df = df.set_index('FileID')
             f = re.search('/(\d+\.csv)',f).group(1)
             f = '%s%s_intersect/%s'%(etl_file_path,typ,f)
             print('dumping %s ...'%f)
-            df.to_csv(f) 
+            df.to_csv(f,header=None) 

@@ -3,12 +3,21 @@ from util import *
 import re
 from datetime import datetime
 import pickle
-file_path = '/data/examples/trend/data/'
-rawdata_path = file_path + 'query_log/'
-export_file_path = 'export/'
-etl_file_path = 'data/trend/'
+import os
+logging.basicConfig(filename='log/trend_util.log',level=logging.DEBUG)
+file_path = os.environ['file_path'] 
+rawdata_path = os.environ['rawdata_path'] 
+export_file_path = os.environ['export_file_path']  
+etl_file_path = os.environ['etl_file_path'] 
 
 ############ etl ############
+def check_file_empty(path,header=None):
+    try:
+        df = pd.read_csv(path,header=header)
+    except pd.errors.EmptyDataError:
+        return False
+    return df
+
 def norm_it(df):
     df = df.div(df.sum(axis=1), axis=0)
     return df
@@ -178,6 +187,7 @@ def get_prod_cus_intersect(df,dump=False,return_fields=['prod_cus'],reverse=True
         train_prod_cus = df['train_prod_cus_set']
         test_prod_cus = df['test_prod_cus_set']
         df_prod_cus = pd.concat([train_prod_cus,test_prod_cus],join='inner',axis=1)
+        df_prod_cus.columns = [0,1]
         if reverse:
             df_prod_cus = df_prod_cus.apply(outer_set,axis=1)
             if dump:
@@ -198,25 +208,41 @@ def get_prod_cus_intersect(df,dump=False,return_fields=['prod_cus'],reverse=True
 
 def common_prod_cus_filter(df,df_prod_cus):
     prods = df_prod_cus.index
-    if len(prods) == 0: return df
+    if len(prods) == 0: return pd.DataFrame({None : []}) 
     if df.index.name == 'FileID': df = df.reset_index()
     df = df.set_index('ProductID')
     df = df.ix[prods]
+    df = pd.DataFrame(df)
     dfs = []
+    logging.info('======= common_prod_cus_filter ======')
     for i,prod in enumerate(prods):
         #get customers of certain product
         cus = pd.Index(df_prod_cus.ix[prod])
         #get certain product of df
-        dft = df.ix[prod].dropna()
+        dft = (df.ix[prod]).dropna()
+        if dft.empty: return False
+        dft = pd.DataFrame(dft)
+        if 'FileID' not in dft.columns:
+            dft = dft.T
         dft = dft.reset_index()
-        print(dft.head(2))
+        if 'index' not in dft.columns:
+            dft = dft.rename({'index':'ProductID'},axis=1)
+        logging.info('%s, %s: '%(i,prod))
+        logging.info(dft.head(2))
+        logging.info('----------------------')
         dft = dft.set_index('CustomerID')
-        dft = dft.ix[cus].dropna()
+        dft = (dft.ix[cus]).dropna()
+        dft = pd.DataFrame(dft)
+        if 'CustomerID' not in dft.columns:
+            dft = dft.T
         dft = dft.reset_index()
+        if 'index' not in dft.columns:
+            dft = dft.rename({'index':'CustomerID'},axis=1)
         dfs.append(dft)
     df = pd.concat(dfs,axis=0)
     df['QueryTs'] = df['QueryTs'].astype(int)
-    df = df.reset_index()
+    if df.index.name == 'FileID': df = df.reset_index()
+    logging.info('======= common_prod_cus_filter end ======')
     return df
 
 def common_filter(df,df_target,typ='tight'):
@@ -231,12 +257,22 @@ def common_filter(df,df_target,typ='tight'):
             ixs = pd.Index(target_set)
             df = df.set_index('ProductID')
             df = df.ix[ixs]
+            dft = pd.DataFrame(dft)
+            if 'ProductID' not in dft.columns:
+                df = df.T
             df = df.reset_index()
+            if 'index' not in dft.columns:
+                df = df.rename({'index':'ProductID'},axis=1)
             target_set = df_target['customer']
             ixs = pd.Index(target_set)
             df = df.set_index('CustomerID')
             df = df.ix[ixs]
+            dft = pd.DataFrame(dft)
+            if 'CustomerID' not in dft.columns:
+                df = df.T
             df = df.reset_index()
+            if 'index' not in dft.columns:
+                df = df.rename({'index':'CustomerID'},axis=1)
         else:
             if typ == 'product':
                 target_set = df_target['product']
@@ -246,6 +282,7 @@ def common_filter(df,df_target,typ='tight'):
                 target_set = df_target['customer']
                 ixs = pd.Index(target_set)
                 df = df.set_index('CustomerID')
+            if df.empty: return False
             df = df.ix[ixs]
             df = df.reset_index()
     return df
