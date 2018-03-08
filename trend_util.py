@@ -35,6 +35,16 @@ def get_aggr(df,flags=flags):
     df = df.fillna(0)
     return df
 
+def get_deep_aggr(df,flags=flags):
+    levels = df.index.names
+    if len(levels) > 1:
+        df = df.groupby(level=levels).agg('sum')
+        df = df.groupby(level='FileID').agg(flags)
+    elif len(levels) == 1:
+        df = df.groupby(df.index.get_level_values(0)).agg(flags)
+    df = df.fillna(0)
+    return df
+
 def df_add(df,df_past,add_by='int'):
     intersect_ix = df.index.intersection(df_past.index)
     diff_ix = df.index.difference(df_past.index)
@@ -357,6 +367,8 @@ def get_open_time(df,df_past=None):
     return {'df':df, 'max_timestamp':max_timestamp}
 
 def get_field_open_time(df,df_past=None,field='CustomerID'):
+    if field == 'ProductCustomerID':
+        df = df.assign(ProductCustomerID=df['ProductID'].astype('str')+df['CustomerID'].astype('str'))
     df = df[['FileID',field,'QueryTs']]
     if df_past is not None and df_past['max_timestamp'] is not None:
         df = df.set_index('FileID')
@@ -377,10 +389,7 @@ def get_open_time_aggr(df,field='',flags=flags):
     #q1.name = 'QueryTsIntervalQ1'
     #q3 = df.groupby('FileID')['QueryTsInterval'].quantile(0.75)
     #q3.name = 'QueryTsIntervalQ3'
-    if field !='':
-        df = df.groupby(['FileID','QueryTsInterval%s'%field])['QueryTsInterval%s'%field].agg(flags)
-    else:
-        df = df.groupby('FileID')['QueryTsInterval%s'%field].agg(flags)
+    df = df.groupby('FileID')['QueryTsInterval%s'%field].agg(flags)
     cols = df.columns
     cols = [col.capitalize() for col in cols]
     cols = ['QueryTsInterval%s%s'%(col,field) for col in cols]
