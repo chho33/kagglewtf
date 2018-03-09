@@ -694,7 +694,7 @@ def dict_generator(files=files,ns=ns,n=31):
     df_past = df_to_dict(df_past)
     for d in df_past:
         yield d
-=======
+
 ############ dnn ############
 from keras.models import Sequential
 from keras.layers.core import Dense,Activation
