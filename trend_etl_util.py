@@ -144,6 +144,8 @@ def etl_prod_cus_uniq(df_prod_nuniq,deep=False,suffix=''):
         df_prod_nuniq = get_aggr(df_prod_nuniq,flags=flags)
     df_prod_nuniq = extend_cols(df_prod_nuniq)
     filename = 'export/trend_prod_cus_nuniq%s.csv'%suffix
+    if deep:
+        filename = 'export/trend_prod_cus_nuniq%s_deep.csv'%suffix
     print('dump %s ...'%filename)
     df_prod_nuniq.to_csv(filename)
 

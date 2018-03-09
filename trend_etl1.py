@@ -26,7 +26,7 @@ for i in range(ns)[::n]:
     else:
         df_prod_daily = get_file_product_count(df,df_prod_daily)
         df_cus_count = get_count(df,df_cus_count,field='countCustomer')
-        df_prod_count = get_count(df,df_cus_count,field='countProduct')
+        df_prod_count = get_count(df,df_prod_count,field='countProduct')
         df_cus_nuniq = get_uniq(df,df_cus_nuniq,field='uniqCustomer')
         df_prod_nuniq = get_uniq(df,df_prod_nuniq,field='uniqProduct')
         df_prod_cus_count = get_count(df,df_prod_cus_count,field='countProductCustomer')
@@ -36,7 +36,7 @@ for i in range(ns)[::n]:
 
 
 #count
-etl_cusromer(df_cus_count)
+etl_customer(df_cus_count)
 etl_prod(df_prod_count)
 etl_prod_cus(df_prod_cus_count)
 etl_count_by_fileid(df_fileid_count_daliy)

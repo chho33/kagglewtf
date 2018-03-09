@@ -30,7 +30,8 @@ def percentile(n):
 
 flags = ['size','sum','mean','std','max','min','median','skew','mad',percentile(25),percentile(75)]
 flags = ['mean','std','max','min','median','skew','mad',percentile(25),percentile(75)]
-def get_aggr(df,flags=flags):
+def get_aggr(df,flags=flags,deep=False):
+    if deep: return get_deep_aggr(df=df,flags=flags)
     df = df.groupby(df.index.get_level_values(0)).agg(flags)
     df = df.fillna(0)
     return df
@@ -472,16 +473,25 @@ def concat_list(x):
 def count_uniq(x):
     return len(x[0])
 
-def get_uniq(df,df_past=None,field='uniqCustomer'):
+def get_uniq(df,df_past=None,field='uniqCustomer',deep=True):
     #filed : 'uniqCustomer' , 'uniqProduct'
     if 'Customer' in field:
-        df = df.groupby('FileID')['CustomerID'].unique()
+        if deep:
+            df = df.groupby(['FileID','CustomerID'])['CustomerID'].unique()
+        else:
+            df = df.groupby('FileID')['CustomerID'].unique()
     elif 'Product' in field:
-        df = df.groupby('FileID')['ProductID'].unique()
+        if deep:
+            df = df.groupby(['FileID','ProductID'])['ProductID'].unique()
+        else:
+            df = df.groupby('FileID')['ProductID'].unique()
     elif 'Product' in field and 'Customer' in field:
         df = df.assign(ProductCustomerID=df['ProductID'].astype('str')+df['CustomerID'].astype('str'))
         df = df.drop(['ProductID','CustomerID'])
-        df = df.groupby('FileID')['ProductCustomerID'].unique()
+        if deep:
+            df = df.groupby(['FileID','ProductCustomerID'])['ProductCustomerID'].unique()
+        else:
+            df = df.groupby('FileID')['ProductCustomerID'].unique()
     df.name = field
     ixs = df.index
     df = pd.DataFrame(df)
@@ -500,7 +510,7 @@ def get_nuniq(df,field='uniqCustomer'):
     return df
 
 #count
-def get_count(df,df_past=None,field='countCustomer'):
+def get_count(df,df_past=None,field='countCustomer',deep=True):
     #filed : 'countCustomer' , 'countProduct'
     if 'Product' in field and 'Customer' in field:
         print('prod_cus')
@@ -509,10 +519,16 @@ def get_count(df,df_past=None,field='countCustomer'):
         df = df.groupby(['FileID','ProductCustomerID'])['ProductCustomerID'].count()
     elif 'Customer' in field:
         print('cus')
-        df = df.groupby(['FileID','CustomerID'])['CustomerID'].count()
+        if deep:
+            df = df.groupby(['FileID','CustomerID'])['CustomerID'].count()
+        else:
+            df = df.groupby('FileID')['CustomerID'].count()
     elif 'Product' in field:
         print('prod')
-        df = df.groupby(['FileID','ProductID'])['ProductID'].count()
+        if deep:
+            df = df.groupby(['FileID','ProductID'])['ProductID'].count()
+        else:
+            df = df.groupby('FileID')['ProductID'].count()
 
     df.name = field
     df = pd.DataFrame(df)
