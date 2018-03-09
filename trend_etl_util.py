@@ -57,65 +57,95 @@ def etl_file_prod_count(df_prod_daily,suffix=''):
     df_prod_daily.to_csv(filename)
 
 #count customer day by day
-def etl_customer(df_cus_count,suffix=''):
+def etl_customer(df_cus_count,deep=False,suffix=''):
     print('dump customer count...')
     flags = ['sum','size','mean','std','max','min','median','skew','mad',percentile(25),percentile(75)]
-    df_cus_count= get_aggr(df_cus_count,flags=flags)
+    if deep:
+        df_cus_count= get_deep_aggr(df_cus_count,flags=flags)
+    else: 
+        df_cus_count= get_aggr(df_cus_count,flags=flags)
     df_cus_count = extend_cols(df_cus_count)
     filename = 'export/trend_cus_count%s.csv'%suffix
+    if deep:
+        filename = 'export/trend_cus_count%s_deep.csv'%suffix
     print('dump %s ...'%filename)
     df_cus_count.to_csv(filename)
 
 #count product day by day
-def etl_prod(df_prod_count,suffix=''):
+def etl_prod(df_prod_count,deep=False,suffix=''):
     print('dump prod count...')
     flags = ['sum','size','mean','std','max','min','median','skew','mad',percentile(25),percentile(75)]
-    df_prod_count= get_aggr(df_prod_count,flags=flags)
+    if deep:
+        df_prod_count= get_aggr(df_prod_count,flags=flags)
+    else:
+        df_prod_count= get_aggr(df_prod_count,flags=flags)
     df_prod_count = extend_cols(df_prod_count)
     filename = 'export/trend_prod_count%s.csv'%suffix
+    if deep:
+        filename = 'export/trend_prod_count%s_deep.csv'%suffix
     print('dump %s ...'%filename)
     df_prod_count.to_csv(filename)
 
 #count prod+customer day by day
-def etl_prod_cus(df_cus_count,suffix=''):
+def etl_prod_cus(df_cus_count,deep=False,suffix=''):
     print('dump prod+customer count...')
     flags = ['sum','size','mean','std','max','min','median','skew','mad',percentile(25),percentile(75)]
-    df_cus_count= get_aggr(df_cus_count,flags=flags)
+    if deep:
+        df_cus_count= get_deep_aggr(df_cus_count,flags=flags)
+    else:
+        df_cus_count= get_aggr(df_cus_count,flags=flags)
     df_cus_count = extend_cols(df_cus_count)
     filename = 'export/trend_prod_cus_count%s.csv'%suffix
+    if deep:
+        filename = 'export/trend_prod_cus_count%s_deep.csv'%suffix
     print('dump %s ...'%filename)
     df_cus_count.to_csv(filename)
 
 #count uniq costomer day by day
-def etl_costomer_uniq(df_cus_nuniq,suffix=''):
+def etl_costomer_uniq(df_cus_nuniq,deep=False,suffix=''):
     print('dump uniq customer count...')
     flags = ['sum','size','mean','std','max','min','median','skew','mad',percentile(25),percentile(75)]
     #df_cus_nuniq = get_nuniq(df_cus_uniq,field='uniqCustomer')
-    df_cus_nuniq = get_aggr(df_cus_nuniq,flags=flags)
+    if deep:
+        df_cus_nuniq = get_deep_aggr(df_cus_nuniq,flags=flags)
+    else:
+        df_cus_nuniq = get_aggr(df_cus_nuniq,flags=flags)
     df_cus_nuniq = extend_cols(df_cus_nuniq)
     filename = 'export/trend_cus_nuniq%s.csv'%suffix
+    if deep:
+        filename = 'export/trend_cus_nuniq%s_deep.csv'%suffix
     print('dump %s ...'%filename)
     df_cus_nuniq.to_csv(filename)
 
 #count uniq product day by day
-def etl_prod_uniq(df_prod_nuniq,suffix=''):
+def etl_prod_uniq(df_prod_nuniq,deep=False,suffix=''):
     print('dump uniq product count...')
     flags = ['sum','size','mean','std','max','min','median','skew','mad',percentile(25),percentile(75)]
     #df_prod_nuniq = get_nuniq(df_prod_uniq,field='uniqProduct')
-    df_prod_nuniq = get_aggr(df_prod_nuniq,flags=flags)
+    if deep:
+        df_prod_nuniq = get_deep_aggr(df_prod_nuniq,flags=flags)
+    else:
+        df_prod_nuniq = get_aggr(df_prod_nuniq,flags=flags)
     df_prod_nuniq = extend_cols(df_prod_nuniq)
     filename = 'export/trend_prod_nuniq%s.csv'%suffix
+    if deep:
+        filename = 'export/trend_prod_nuniq%s_deep.csv'%suffix
     print('dump %s ...'%filename)
     df_prod_nuniq.to_csv(filename)
 
 #count uniq product day by day
-def etl_prod_cus_uniq(df_prod_nuniq,suffix=''):
+def etl_prod_cus_uniq(df_prod_nuniq,deep=False,suffix=''):
     print('dump uniq prod+cus count...')
     flags = ['sum','size','mean','std','max','min','median','skew','mad',percentile(25),percentile(75)]
     #df_prod_nuniq = get_nuniq(df_prod_uniq,field='uniqProduct')
-    df_prod_nuniq = get_aggr(df_prod_nuniq,flags=flags)
+    if deep:
+        df_prod_nuniq = get_aggr(df_prod_nuniq,flags=flags)
+    else:
+        df_prod_nuniq = get_aggr(df_prod_nuniq,flags=flags)
     df_prod_nuniq = extend_cols(df_prod_nuniq)
     filename = 'export/trend_prod_cus_nuniq%s.csv'%suffix
+    if deep:
+        filename = 'export/trend_prod_cus_nuniq%s_deep.csv'%suffix
     print('dump %s ...'%filename)
     df_prod_nuniq.to_csv(filename)
 

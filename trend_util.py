@@ -6,13 +6,14 @@ import pickle
 import os
 import glob
 logging.basicConfig(filename='log/trend_util.log',level=logging.DEBUG)
-file_path = os.environ['file_path'] 
-rawdata_path = os.environ['rawdata_path'] 
-export_file_path = os.environ['export_file_path']  
-etl_file_path = os.environ['etl_file_path'] 
+file_path = os.environ['file_path'] if 'file_path' in os.environ else '/data/examples/trend/data/' 
+rawdata_path = os.environ['rawdata_path'] if 'rawdata_path' in os.environ else '/data/examples/trend/data/query_log/' 
+export_file_path = os.environ['export_file_path'] if 'export_file_path' in os.environ else 'export/' 
+etl_file_path = os.environ['etl_file_path'] if 'etl_file_path' in os.environ else 'data/trend/' 
 files = glob.glob(rawdata_path+'/*.csv')
 list.sort(files)
 ns = len(files)
+
 ############ etl ############
 def check_file_empty(path,header=None):
     try:
@@ -33,8 +34,19 @@ def percentile(n):
 
 flags = ['size','sum','mean','std','max','min','median','skew','mad',percentile(25),percentile(75)]
 flags = ['mean','std','max','min','median','skew','mad',percentile(25),percentile(75)]
-def get_aggr(df,flags=flags):
+def get_aggr(df,flags=flags,deep=False):
+    if deep: return get_deep_aggr(df=df,flags=flags)
     df = df.groupby(df.index.get_level_values(0)).agg(flags)
+    df = df.fillna(0)
+    return df
+
+def get_deep_aggr(df,flags=flags):
+    levels = df.index.names
+    if len(levels) > 1:
+        df = df.groupby(level=levels).agg('sum')
+        df = df.groupby(level='FileID').agg(flags)
+    elif len(levels) == 1:
+        df = df.groupby(df.index.get_level_values(0)).agg(flags)
     df = df.fillna(0)
     return df
 
@@ -360,6 +372,8 @@ def get_open_time(df,df_past=None):
     return {'df':df, 'max_timestamp':max_timestamp}
 
 def get_field_open_time(df,df_past=None,field='CustomerID'):
+    if field == 'ProductCustomerID':
+        df = df.assign(ProductCustomerID=df['ProductID'].astype('str')+df['CustomerID'].astype('str'))
     df = df[['FileID',field,'QueryTs']]
     if df_past is not None and df_past['max_timestamp'] is not None:
         df = df.set_index('FileID')
@@ -463,16 +477,25 @@ def concat_list(x):
 def count_uniq(x):
     return len(x[0])
 
-def get_uniq(df,df_past=None,field='uniqCustomer'):
+def get_uniq(df,df_past=None,field='uniqCustomer',deep=True):
     #filed : 'uniqCustomer' , 'uniqProduct'
     if 'Customer' in field:
-        df = df.groupby('FileID')['CustomerID'].unique()
+        if deep:
+            df = df.groupby(['FileID','CustomerID'])['CustomerID'].unique()
+        else:
+            df = df.groupby('FileID')['CustomerID'].unique()
     elif 'Product' in field:
-        df = df.groupby('FileID')['ProductID'].unique()
+        if deep:
+            df = df.groupby(['FileID','ProductID'])['ProductID'].unique()
+        else:
+            df = df.groupby('FileID')['ProductID'].unique()
     elif 'Product' in field and 'Customer' in field:
         df = df.assign(ProductCustomerID=df['ProductID'].astype('str')+df['CustomerID'].astype('str'))
         df = df.drop(['ProductID','CustomerID'])
-        df = df.groupby('FileID')['ProductCustomerID'].unique()
+        if deep:
+            df = df.groupby(['FileID','ProductCustomerID'])['ProductCustomerID'].unique()
+        else:
+            df = df.groupby('FileID')['ProductCustomerID'].unique()
     df.name = field
     ixs = df.index
     df = pd.DataFrame(df)
@@ -491,16 +514,26 @@ def get_nuniq(df,field='uniqCustomer'):
     return df
 
 #count
-def get_count(df,df_past=None,field='countCustomer'):
+def get_count(df,df_past=None,field='countCustomer',deep=True):
     #filed : 'countCustomer' , 'countProduct'
-    if 'Customer' in field:
-        df = df.groupby('FileID')['CustomerID'].count()
-    elif 'Product' in field:
-        df = df.groupby('FileID')['ProductID'].count()
-    elif 'Product' in field and 'Customer' in field:
+    if 'Product' in field and 'Customer' in field:
+        print('prod_cus')
         df = df.assign(ProductCustomerID=df['ProductID'].astype('str')+df['CustomerID'].astype('str'))
-        df = df.drop(['ProductID','CustomerID'])
-        df = df.groupby('FileID')['ProductCustomerID'].count()
+        df = df.drop(['ProductID','CustomerID'],axis=1)
+        df = df.groupby(['FileID','ProductCustomerID'])['ProductCustomerID'].count()
+    elif 'Customer' in field:
+        print('cus')
+        if deep:
+            df = df.groupby(['FileID','CustomerID'])['CustomerID'].count()
+        else:
+            df = df.groupby('FileID')['CustomerID'].count()
+    elif 'Product' in field:
+        print('prod')
+        if deep:
+            df = df.groupby(['FileID','ProductID'])['ProductID'].count()
+        else:
+            df = df.groupby('FileID')['ProductID'].count()
+
     df.name = field
     df = pd.DataFrame(df)
     if df_past is not None:
@@ -661,3 +694,125 @@ def dict_generator(files=files,ns=ns,n=31):
     df_past = df_to_dict(df_past)
     for d in df_past:
         yield d
+=======
+############ dnn ############
+from keras.models import Sequential
+from keras.layers.core import Dense,Activation
+from keras.callbacks import EarlyStopping,ModelCheckpoint
+from keras.utils import to_categorical
+from sklearn import metrics
+from keras.wrappers.scikit_learn import KerasClassifier
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
+from sklearn.model_selection import train_test_split
+from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import cross_val_score
+from keras.callbacks import Callback
+from keras.backend import clear_session
+from keras.layers import Dense, Dropout, Flatten, Activation, BatchNormalization, regularizers
+from keras import backend as K
+import tensorflow as tf
+
+def binary_crossentropy_with_ranking(y_true, y_pred):
+    #https://gist.github.com/jerheff/8cf06fe1df0695806456
+    #https://github.com/keras-team/keras/issues/1732#issuecomment-358236607
+    #http://tflearn.org/objectives/#roc-auc-score
+    print(y_true.dtype,y_pred.dtype)
+    """ Trying to combine ranking loss with numeric precision"""
+    # first get the log loss like normal
+    logloss = K.mean(K.binary_crossentropy(y_pred, y_true), axis=-1)
+    
+    # next, build a rank loss
+    
+    # clip the probabilities to keep stability
+    y_pred_clipped = K.clip(y_pred, K.epsilon(), 1-K.epsilon())
+
+    # translate into the raw scores before the logit
+    y_pred_score = K.log(y_pred_clipped / (1 - y_pred_clipped))
+
+    # determine what the maximum score for a zero outcome is
+    y_pred_score_zerooutcome_max = K.max(y_pred_score * tf.cast((y_true <1), tf.float32))
+
+    # determine how much each score is above or below it
+    rankloss = y_pred_score - y_pred_score_zerooutcome_max
+
+    # only keep losses for positive outcomes
+    rankloss = rankloss * y_true
+
+    # only keep losses where the score is below the max
+    rankloss = K.square(K.clip(rankloss, -100, 0))
+
+    # average the loss for just the positive outcomes
+    rankloss = K.sum(rankloss, axis=-1) / (K.sum(tf.cast((y_true <1), tf.float32)) + 1)
+
+    # return (rankloss + 1) * logloss - an alternative to try
+    return rankloss + logloss
+
+class LossHistory(Callback):
+    def on_train_begin(self, logs={}):
+        self.losses = []
+
+    def on_batch_end(self, batch, logs={}):
+        self.losses.append(logs.get('loss'))
+
+class roc_callback(Callback):
+    def __init__(self,training_data,validation_data):
+        self.x = training_data[0]
+        self.y = training_data[1]
+        self.x_val = validation_data[0]
+        self.y_val = validation_data[1]
+
+    def on_train_begin(self, logs={}):
+        return
+
+    def on_train_end(self, logs={}):
+        return
+
+    def on_epoch_begin(self, epoch, logs={}):
+        return
+
+    def on_epoch_end(self, epoch, logs={}):
+        y_pred = self.model.predict(self.x)
+        roc = roc_auc_score(self.y, y_pred)
+        y_pred_val = self.model.predict(self.x_val)
+        roc_val = roc_auc_score(self.y_val, y_pred_val)
+        print('\rroc-auc: %s - roc-auc_val: %s' % (str(round(roc,4)),str(round(roc_val,4))),end=100*' '+'\n')
+        return
+
+    def on_batch_begin(self, batch, logs={}):
+        return
+
+    def on_batch_end(self, batch, logs={}):
+        return
+
+def static_vars(**kwargs):
+    def decorate(func):
+        for k in kwargs:
+            setattr(func, k, kwargs[k])
+        return func
+    return decorate
+
+@static_vars(stream_vars=None)
+def tf_auc_roc(y_true, y_pred):
+    value, update_op = tf.contrib.metrics.streaming_auc(
+        y_pred, y_true, curve='ROC', name='auc_roc')
+    tf_auc_roc.stream_vars = [i for i in tf.local_variables() if i.name.split('/')[0] == 'auc_roc']
+    return control_flow_ops.with_dependencies([update_op], value)
+
+def tf_auc_roc(y_true, y_pred):
+    # any tensorflow metric
+    value, update_op = tf.contrib.metrics.streaming_auc(y_pred, y_true)
+
+    # find all variables created for this metric
+    metric_vars = [i for i in tf.local_variables() if 'auc_roc' in i.name.split('/')[1]]
+
+    # Add metric variables to GLOBAL_VARIABLES collection.
+    # They will be initialized for new session.
+    for v in metric_vars:
+        tf.add_to_collection(tf.GraphKeys.GLOBAL_VARIABLES, v)
+
+    # force to update metric values
+    with tf.control_dependencies([update_op]):
+        value = tf.identity(value)
+        return value
+############ dnn ############

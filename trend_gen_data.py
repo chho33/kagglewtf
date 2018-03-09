@@ -3,16 +3,19 @@ files = ['trend_tfidf_CustomerID0.csv']
 files = ['trend_interval.csv','trend_prod_daily.csv','trend_tfidf_ProductID.csv',
          'trend_week_norm.csv','trend_hour_norm.csv','trend_fileid_count_daily.csv',
          'trend_tfidf_day.csv','trend_interval_productid.csv','trend_interval_customerid.csv']
-files += ['trend_prod_cus_nuniq.csv','trend_prod_cus_count.csv']
 
 files_concat = ['trend_prod_count.csv','trend_prod_nuniq.csv']
-files_concat1 = ['trend_cus_count.csv','trend_cus_nuniq.csv']
-files_concat_list = [files_concat,files_concat1]
+files_concat += ['trend_cus_count.csv','trend_cus_nuniq.csv']
+files_concat += ['trend_prod_cus_nuniq.csv','trend_prod_cus_count.csv']
+files_concat = ['trend_prod_count_deep.csv','trend_prod_nuniq_deep.csv']
+files_concat += ['trend_cus_count_deep.csv','trend_cus_nuniq_deep.csv']
+files_concat += ['trend_prod_cus_nuniq_deep.csv','trend_prod_cus_count_deep.csv']
+files_concat_list = [files_concat]
 
-vari = True
+vari = False
 cori = True
 vari_threshold = 0.25
-cori_threshold = 0.99
+cori_threshold = 0.999
 show_remain = False
 
 def remove_percentage_cols(df):
