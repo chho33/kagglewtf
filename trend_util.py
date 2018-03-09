@@ -4,12 +4,15 @@ import re
 from datetime import datetime
 import pickle
 import os
+import glob
 logging.basicConfig(filename='log/trend_util.log',level=logging.DEBUG)
 file_path = os.environ['file_path'] 
 rawdata_path = os.environ['rawdata_path'] 
 export_file_path = os.environ['export_file_path']  
 etl_file_path = os.environ['etl_file_path'] 
-
+files = glob.glob(rawdata_path+'/*.csv')
+list.sort(files)
+ns = len(files)
 ############ etl ############
 def check_file_empty(path,header=None):
     try:
@@ -618,3 +621,43 @@ def get_list_FileID(x):
     return list(x.FileID)
 ############ model ############
 
+###### deep learning etl #######
+def get_count_nuniq_by_tm_fileid(df,df_past=None):
+    df_count = df.groupby(['FileID','QueryTs'])['CustomerID','ProductID'].count()
+    df_count.columns = ['%sCount'%col for col in df_count.columns] 
+    df_nuniq = df.groupby(['FileID','QueryTs'])['CustomerID','ProductID'].nunique()
+    df_nuniq.columns = ['%sUniqCount'%col for col in df_nuniq.columns] 
+    df_count = pd.concat([df_count,df_nuniq],axis=1) 
+    df_count = df_count.reset_index()
+    print(df_count.head())
+    if df_past is not None:
+        df_count = pd.concat([df_past,df_count],axis=0)
+    return df_count
+
+def df_generator(files=files):
+    for f in files:
+        print(f)
+        df = pd.read_csv(f,header=None)
+        df.rename(columns={0: 'FileID', 1: 'CustomerID',2:'QueryTs',3:'ProductID'}, inplace=True)
+        df = clean_df(df)
+        df['QueryTs'] = df['QueryTs'].astype(int)
+        yield df
+    
+def dict_generator(files=files,ns=ns,n=31):
+    print('ns :',ns)
+    print('n :',n)
+    for i in range(ns)[::n]:
+        fs = files[i:i+n]
+        print('no.%s =====> %s'%(i,fs))
+        df = [d for d in df_generator(files=fs)]
+        print('len of df =',len(df))
+        df = pd.concat(df,axis=0)
+        if i == 0:
+            df_past = get_count_nuniq_by_tm_fileid(df)
+        else:
+            df_past = get_count_nuniq_by_tm_fileid(df,df_past)
+            df_past = df_past.groupby(['FileID','QueryTs']).sum()
+    df_past = df_past.reset_index()
+    df_past = df_to_dict(df_past)
+    for d in df_past:
+        yield d

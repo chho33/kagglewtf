@@ -252,3 +252,6 @@ def get_lowcorr_df(dataset, threshold=0.95):
                 if colname in dataset.columns:
                     dataset = dataset.drop(colname,axis=1)
     return dataset
+
+def df_to_dict(df,orient='records'):
+    return df.to_dict(orient=orient)
