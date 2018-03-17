@@ -253,5 +253,14 @@ def get_lowcorr_df(dataset, threshold=0.95):
                     dataset = dataset.drop(colname,axis=1)
     return dataset
 
+def drop_if_all_same_vals(df):
+    del_cols = []
+    for col, vals in df.items():
+        vals = set(vals)
+        if len(vals)==1:
+            del_cols.append(col)
+    print('drop all same val cols: ',del_cols)
+    return df.drop(del_cols,axis=1)
+
 def df_to_dict(df,orient='records'):
     return df.to_dict(orient=orient)

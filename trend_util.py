@@ -480,22 +480,13 @@ def count_uniq(x):
 def get_uniq(df,df_past=None,field='uniqCustomer',deep=True):
     #filed : 'uniqCustomer' , 'uniqProduct'
     if 'Customer' in field:
-        if deep:
-            df = df.groupby(['FileID','CustomerID'])['CustomerID'].unique()
-        else:
-            df = df.groupby('FileID')['CustomerID'].unique()
+        df = df.groupby('FileID')['CustomerID'].unique()
     elif 'Product' in field:
-        if deep:
-            df = df.groupby(['FileID','ProductID'])['ProductID'].unique()
-        else:
-            df = df.groupby('FileID')['ProductID'].unique()
+        df = df.groupby('FileID')['ProductID'].unique()
     elif 'Product' in field and 'Customer' in field:
         df = df.assign(ProductCustomerID=df['ProductID'].astype('str')+df['CustomerID'].astype('str'))
         df = df.drop(['ProductID','CustomerID'])
-        if deep:
-            df = df.groupby(['FileID','ProductCustomerID'])['ProductCustomerID'].unique()
-        else:
-            df = df.groupby('FileID')['ProductCustomerID'].unique()
+        df = df.groupby(['FileID','ProductCustomerID'])['ProductCustomerID'].unique()
     df.name = field
     ixs = df.index
     df = pd.DataFrame(df)
@@ -632,7 +623,7 @@ def extend_cols(df):
 ############ etl ############
 
 ############ model ############
-def get_data(version=4):
+def get_data(version=7):
     cols = ['FileID','y']
     df = pd.read_csv('%s/trend_v%s.csv'%(export_file_path,version))
     df = df.set_index('FileID')
@@ -662,9 +653,9 @@ def get_count_nuniq_by_tm_fileid(df,df_past=None):
     df_nuniq.columns = ['%sUniqCount'%col for col in df_nuniq.columns] 
     df_count = pd.concat([df_count,df_nuniq],axis=1) 
     df_count = df_count.reset_index()
-    print(df_count.head())
     if df_past is not None:
         df_count = pd.concat([df_past,df_count],axis=0)
+    #df_count = df_count.sort_values('QueryTs')
     return df_count
 
 def df_generator(files=files):
@@ -690,10 +681,29 @@ def dict_generator(files=files,ns=ns,n=31):
         else:
             df_past = get_count_nuniq_by_tm_fileid(df,df_past)
             df_past = df_past.groupby(['FileID','QueryTs']).sum()
-    df_past = df_past.reset_index()
+    if 'FileID' not in df_past.columns:
+        df_past = df_past.reset_index()
     df_past = df_to_dict(df_past)
     for d in df_past:
         yield d
+
+def dict_generator(files=files,ns=ns,n=31):
+    print('======= dict_generator =======')
+    print('files: ',files)
+    print('ns :',ns)
+    print('n :',n)
+    for i in range(ns)[::n]:
+        fs = files[i:i+n]
+        print('no.%s =====> %s'%(i,fs))
+        df = [d for d in df_generator(files=fs)]
+        print('len of df =',len(df))
+        df = pd.concat(df,axis=0)
+        df = get_count_nuniq_by_tm_fileid(df)
+        if 'FileID' not in df.columns:
+            df = df.reset_index()
+        df = df_to_dict(df)
+        for d in df:
+            yield d
 
 ############ dnn ############
 from keras.models import Sequential
@@ -717,13 +727,13 @@ def binary_crossentropy_with_ranking(y_true, y_pred):
     #https://gist.github.com/jerheff/8cf06fe1df0695806456
     #https://github.com/keras-team/keras/issues/1732#issuecomment-358236607
     #http://tflearn.org/objectives/#roc-auc-score
-    print(y_true.dtype,y_pred.dtype)
+    #論文： http://papers.nips.cc/paper/2518-auc-optimization-vs-error-rate-minimization.pdf
     """ Trying to combine ranking loss with numeric precision"""
     # first get the log loss like normal
     logloss = K.mean(K.binary_crossentropy(y_pred, y_true), axis=-1)
-    
+
     # next, build a rank loss
-    
+
     # clip the probabilities to keep stability
     y_pred_clipped = K.clip(y_pred, K.epsilon(), 1-K.epsilon())
 
@@ -743,7 +753,7 @@ def binary_crossentropy_with_ranking(y_true, y_pred):
     rankloss = K.square(K.clip(rankloss, -100, 0))
 
     # average the loss for just the positive outcomes
-    rankloss = K.sum(rankloss, axis=-1) / (K.sum(tf.cast((y_true <1), tf.float32)) + 1)
+    rankloss = K.sum(rankloss, axis=-1) / (K.sum(tf.cast((y_true > 0), tf.float32)) + 1)
 
     # return (rankloss + 1) * logloss - an alternative to try
     return rankloss + logloss

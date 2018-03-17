@@ -7,30 +7,34 @@ files = ['trend_interval.csv','trend_prod_daily.csv','trend_tfidf_ProductID.csv'
 files_concat = ['trend_prod_count.csv','trend_prod_nuniq.csv']
 files_concat += ['trend_cus_count.csv','trend_cus_nuniq.csv']
 files_concat += ['trend_prod_cus_nuniq.csv','trend_prod_cus_count.csv']
-files_concat = ['trend_prod_count_deep.csv','trend_prod_nuniq_deep.csv']
-files_concat += ['trend_cus_count_deep.csv','trend_cus_nuniq_deep.csv']
-files_concat += ['trend_prod_cus_nuniq_deep.csv','trend_prod_cus_count_deep.csv']
+files_concat = ['trend_prod_count_deep.csv']
+files_concat += ['trend_cus_count_deep.csv']
+files_concat += ['trend_prod_cus_count_deep.csv']
 files_concat_list = [files_concat]
 
+version = 7 
 vari = False
-cori = True
+cori = False
 vari_threshold = 0.25
 cori_threshold = 0.999
 show_remain = False
 
 def remove_percentage_cols(df):
-    cols = [] 
+    cols = []
     for col in df.columns:
         if 'percentage' in col:
             cols.append(col)
     df = df.drop(cols,axis=1)
-    return df 
+    return df
 
 def filter_data(df,vari=True,cori=True):
     #remove_cols = find_correlation_to_remove(df,cori_threshold)
     #df = df.drop(remove_cols,axis=1)
-    df = get_lowcorr_df(df,threshold=cori_threshold)
-    df = remain_high_variance(df,True,vari_threshold,show_remain=show_remain)
+    if cori:
+        df = get_lowcorr_df(df,threshold=cori_threshold)
+    if vari:
+        df = remain_high_variance(df,True,vari_threshold,show_remain=show_remain)
+    df = drop_if_all_same_vals(df)
     df = remove_percentage_cols(df)
     return df
 
@@ -39,7 +43,6 @@ for f in files:
     print(f)
     df = pd.read_csv('export/'+f)
     df = df.set_index('FileID')
-    df = filter_data(df,vari=vari,cori=cori)
     dfs.append(df)
     print('-----')
 
@@ -52,8 +55,10 @@ for files_con in files_concat_list:
     df = pd.concat(dfc,axis=1)
     df = filter_data(df,vari=vari,cori=cori)
     dfs.append(df)
-     
+
 df = pd.concat(dfs,axis=1)
+df = gen_range(df)
+df = filter_data(df,vari=vari,cori=cori)
 #remove_cols = find_correlation_to_remove(df, threshold=0.95)
 #print(remove_cols)
 #df = df.drop(remove_cols,axis=1)
@@ -61,4 +66,4 @@ df = pd.concat(dfs,axis=1)
 #print(df.head())
 print(df.shape)
 df = df.reset_index()
-df.to_csv('export/trend_v5.csv',index=False)
+df.to_csv('export/trend_v%s.csv'%version,index=False)
